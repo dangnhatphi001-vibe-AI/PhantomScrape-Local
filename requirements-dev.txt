@@ -1,0 +1,4 @@
+-r requirements-local.txt
+pytest>=8,<10
+tomlkit>=0.13,<1
+json5>=0.12,<1

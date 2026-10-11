@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "phantom-scrape-local",
+  "version": "0.1.0",
+  "description": "Local web-to-Markdown extraction over stdio MCP, with optional Chromium rendering.",
+  "author": {"name": "PhiShadow"},
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "PhantomScrape Local",
+        "shortDescription": "Local web to Markdown",
+        "longDescription": "Fetch URLs as Markdown on your own computer without a paid scraping API.",
+        "developerName": "PhiShadow",
+        "category": "Productivity",
+        "defaultPrompt": "Fetch this web page as Markdown with PhantomScrape Local."
+      }
+    }
+  }
+}

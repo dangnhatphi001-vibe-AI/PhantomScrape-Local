@@ -1,0 +1,8 @@
+# Independent of the legacy FastAPI dependencies in requirements.txt.
+mcp==1.30.0
+httpx==0.28.1
+beautifulsoup4==4.15.0
+markdownify==1.2.3
+trafilatura==2.3.1
+# Optional: only needed for mode=browser or auto rendering fallback.
+playwright==1.63.0
