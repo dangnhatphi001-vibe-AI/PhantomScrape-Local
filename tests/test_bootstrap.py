@@ -4,6 +4,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import tarfile
+import pytest
+
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="Bash bootstrap is for macOS/Linux; Windows uses PowerShell")
 
 
 def fixture_archive(path):

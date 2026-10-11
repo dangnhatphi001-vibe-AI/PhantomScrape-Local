@@ -108,7 +108,7 @@ def test_http_metadata_storage_and_isolation(base_url, tmp_path):
             first = save_document(doc, tmp_path)
             second = save_document(doc, tmp_path)
             assert first != second
-            assert doc.markdown in first.read_text()
+            assert doc.markdown in first.read_text(encoding="utf-8")
             await scraper.scrape(base_url + "/set-cookie", "http")
             clean = await scraper.scrape(base_url + "/cookie", "http")
             assert "NO COOKIE" in clean.markdown
@@ -174,7 +174,7 @@ def test_cli_output_and_overwrite(base_url, tmp_path):
     command = [sys.executable, "-m", "phantom_local", "scrape", base_url + "/article", "--mode", "http", "-o", str(output)]
     result = subprocess.run(command, capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
-    assert "Nội dung tiếng Việt" in output.read_text()
+    assert "Nội dung tiếng Việt" in output.read_text(encoding="utf-8")
     duplicate = subprocess.run(command, capture_output=True, text=True, timeout=15)
     assert duplicate.returncode == 1
     failed = subprocess.run([sys.executable, "-m", "phantom_local", "scrape", base_url + "/missing", "--mode", "http"], capture_output=True, text=True, timeout=15)

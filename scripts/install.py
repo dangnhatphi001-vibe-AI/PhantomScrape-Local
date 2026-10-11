@@ -11,6 +11,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -56,12 +57,65 @@ def choose_targets() -> list[str]:
             print("Nhập số trong menu; chọn nhiều nơi bằng dấu phẩy.")
 
 
-def run(command: list[str], **kwargs):
-    subprocess.run(command, check=True, **kwargs)
+def run(command: list[str], label: str | None = None, **kwargs):
+    if label is None:
+        subprocess.run(command, check=True, **kwargs)
+        return
+    animated = sys.stdout.isatty()
+    frames = "◐◓◑◒"
+    try:
+        frames.encode(sys.stdout.encoding or "utf-8")
+    except UnicodeEncodeError:
+        frames = "|/-\\"
+    if not animated:
+        print(label, flush=True)
+    timeout = kwargs.pop("timeout", None)
+    started = time.monotonic()
+    # Keep command output away from the spinner; show it in full on failure.
+    with tempfile.TemporaryFile() as log:
+        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, **kwargs)
+        try:
+            tick = 0
+            while process.poll() is None:
+                if timeout is not None and time.monotonic() - started > timeout:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                if animated:
+                    print(f"\r{frames[tick % len(frames)]} {label}  {int(time.monotonic() - started)}s", end="", flush=True)
+                    tick += 1
+                time.sleep(0.1)
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            if animated:
+                print("\r" + " " * (len(label) + 25) + "\r", end="", flush=True)
+            log.seek(0)
+            print(log.read().decode("utf-8", errors="replace"), file=sys.stderr, end="")
+            raise
+        if animated:
+            print("\r" + " " * (len(label) + 25) + "\r", end="", flush=True)
+        if process.returncode:
+            log.seek(0)
+            print(log.read().decode("utf-8", errors="replace"), file=sys.stderr, end="")
+            raise subprocess.CalledProcessError(process.returncode, command)
+        print(f"✓ {label}", flush=True)
 
 
-def runtime_python(directory: Path) -> Path:
-    return directory / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+def default_install_dir(home: Path, platform: str | None = None, environment=None) -> Path:
+    platform = platform or sys.platform
+    environment = os.environ if environment is None else environment
+    if platform == "win32":
+        return Path(environment.get("LOCALAPPDATA", str(home / "AppData/Local"))) / NAME
+    if platform == "darwin":
+        return home / "Library/Application Support" / NAME
+    return Path(environment.get("XDG_DATA_HOME", str(home / ".local/share"))) / NAME
+
+
+def runtime_python(directory: Path, platform: str | None = None) -> Path:
+    return directory / ".venv" / ("Scripts/python.exe" if (platform or sys.platform) == "win32" else "bin/python")
 
 
 def setup_runtime(directory: Path, browser: bool) -> Path:
@@ -77,17 +131,14 @@ def setup_runtime(directory: Path, browser: bool) -> Path:
             shutil.copy2(SOURCE / "LICENSE", directory / "LICENSE")
     python = runtime_python(directory)
     if not python.is_file():
-        print("\n[1/4] Tạo môi trường Python riêng…", flush=True)
-        run([sys.executable, "-m", "venv", str(directory / ".venv")])
-    print("[2/4] Cài thư viện… (lần đầu cần tải từ Internet)", flush=True)
+        run([sys.executable, "-m", "venv", str(directory / ".venv")], label="[1/4] Tạo môi trường Python riêng…")
     run([str(python), "-m", "pip", "install", "--disable-pip-version-check", "-q",
-         "-r", str(directory / "requirements-local.txt"), "tomlkit>=0.13,<1", "json5>=0.12,<1"])
+         "-r", str(directory / "requirements-local.txt"), "tomlkit>=0.13,<1", "json5>=0.12,<1"],
+        label="[2/4] Tải và cài thư viện…")
     if browser:
-        print("[3/4] Chuẩn bị Chromium cho trang dùng JavaScript…", flush=True)
-        run([str(python), "-m", "playwright", "install", "chromium"])
+        run([str(python), "-m", "playwright", "install", "chromium"], label="[3/4] Tải Chromium cho trang JavaScript…")
     else:
         print("[3/4] Bỏ tải Chromium (--no-browser); dùng mode http.", flush=True)
-    print("[4/4] Kiểm tra MCP trước khi thêm vào ứng dụng…", flush=True)
     # Verify handshake and discovery with the installed runtime, not source imports.
     probe = '''import asyncio, sys
 from mcp import ClientSession, StdioServerParameters
@@ -101,7 +152,8 @@ async def main():
             assert {"scrape_url", "scrape_urls"} <= names
 asyncio.run(main())
 '''
-    run([str(python), "-c", probe, str(directory / "scripts/run_mcp.py")], timeout=30)
+    run([str(python), "-c", probe, str(directory / "scripts/run_mcp.py")],
+        label="[4/4] Kiểm tra kết nối MCP…", timeout=30)
     return python
 
 
@@ -144,12 +196,13 @@ def object_value(document, key):
     return value
 
 
-def configure(target: str, python: Path, directory: Path, home: Path, use_environment: bool = True):
+def configure(target: str, python: Path, directory: Path, home: Path, use_environment: bool = True, platform: str | None = None):
     import json5
     import tomlkit
 
     script = str(directory / "scripts/run_mcp.py")
     command = str(python)
+    platform = platform or sys.platform
     if target in {"codex", "chatgpt"}:
         config_dir = Path(os.environ.get("CODEX_HOME", str(home / ".codex"))) if use_environment else home / ".codex"
         path = config_dir / "config.toml"
@@ -189,19 +242,21 @@ def configure(target: str, python: Path, directory: Path, home: Path, use_enviro
         elif target == "cursor":
             path, key = home / ".cursor/mcp.json", "mcpServers"
         elif target == "vscode":
-            if sys.platform == "darwin":
+            if platform == "darwin":
                 path = home / "Library/Application Support/Code/User/mcp.json"
-            elif os.name == "nt":
-                path = Path(os.environ.get("APPDATA", str(home / "AppData/Roaming"))) / "Code/User/mcp.json"
+            elif platform == "win32":
+                roaming = os.environ.get("APPDATA") if use_environment else None
+                path = Path(roaming or str(home / "AppData/Roaming")) / "Code/User/mcp.json"
             else:
                 config_dir = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config"))) if use_environment else home / ".config"
                 path = config_dir / "Code/User/mcp.json"
             key = "servers"
         elif target == "claude-desktop":
-            if sys.platform == "darwin":
+            if platform == "darwin":
                 path = home / "Library/Application Support/Claude/claude_desktop_config.json"
-            elif os.name == "nt":
-                path = Path(os.environ.get("APPDATA", str(home / "AppData/Roaming"))) / "Claude/claude_desktop_config.json"
+            elif platform == "win32":
+                roaming = os.environ.get("APPDATA") if use_environment else None
+                path = Path(roaming or str(home / "AppData/Roaming")) / "Claude/claude_desktop_config.json"
             else:
                 raise ValueError("Adapter Claude Desktop của trình cài chỉ hỗ trợ macOS/Windows. Linux hãy chọn Claude Code.")
             key = "mcpServers"
@@ -252,8 +307,7 @@ def main():
     parser = argparse.ArgumentParser(description="Cài PhantomScrape vào AI bằng menu, không sửa config bằng tay.")
     parser.add_argument("--targets", help="Bỏ menu, ví dụ codex,chatgpt,claude,opencode hoặc all")
     parser.add_argument("--no-browser", action="store_true", help="Không tải Chromium")
-    data_root = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
-    parser.add_argument("--install-dir", type=Path, default=data_root / NAME)
+    parser.add_argument("--install-dir", type=Path, default=default_install_dir(Path.home()))
     parser.add_argument("--config-home", type=Path, default=Path.home(), help="Thư mục config home khác (dùng cho kiểm thử)")
     args = parser.parse_args()
     args.isolated_config = args.config_home.resolve() != Path.home().resolve()
@@ -269,7 +323,7 @@ def main():
             print("Đã thoát, chưa cài gì.")
             return 0
         if targets == ["claude-desktop"] and sys.platform.startswith("linux"):
-                raise ValueError("Adapter Claude Desktop hiện chỉ hỗ trợ macOS/Windows. Linux chọn Claude Code (3).")
+            raise ValueError("Adapter Claude Desktop hiện chỉ hỗ trợ macOS/Windows. Linux chọn Claude Code (3).")
         directory = args.install_dir.expanduser().resolve()
         python = setup_runtime(directory, browser=not args.no_browser)
         # Config parsers live inside the isolated runtime; rerun only registration there.
@@ -280,6 +334,9 @@ def main():
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"\nCài chưa hoàn tất: {exc}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print("\nĐã hủy cài đặt.", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

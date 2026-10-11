@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -47,9 +48,10 @@ def test_json_configs_preserve_other_settings(tmp_path, target, filename, key):
     result = json.loads(config.read_text())
     assert result["keep"] == {"setting": True}
     assert result[key]["other"]["command"] == "other-tool"
-    assert result[key]["phantom-local"]["command"] == "/runtime/python"
+    assert result[key]["phantom-local"]["command"] == str(Path("/runtime/python"))
     assert backup.read_text() == before
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o777 == 0o600
 
 
 def test_opencode_both_json_and_jsonc(tmp_path):
@@ -66,7 +68,7 @@ def test_opencode_both_json_and_jsonc(tmp_path):
     assert result["mcp"]["other"]["type"] == "remote"
     for path in [json_path, jsonc_path]:
         assert json.loads(path.read_text())["mcp"]["phantom-local"] == {
-            "type": "local", "command": ["/runtime/python", "/runtime/scripts/run_mcp.py"],
+            "type": "local", "command": [str(Path("/runtime/python")), str(Path("/runtime/scripts/run_mcp.py"))],
             "enabled": True, "timeout": 20000,
         }
     assert json.loads(jsonc_path.read_text())["permission"] == "ask"
@@ -109,3 +111,50 @@ def test_runtime_copy_includes_original_license(tmp_path, monkeypatch):
     monkeypatch.setattr(installer, "run", lambda *args, **kwargs: None)
     assert installer.setup_runtime(destination, browser=False) == python
     assert (destination / "LICENSE").read_bytes() == notice
+
+
+@pytest.mark.parametrize("platform,target,relative", [
+    ("win32", "vscode", "AppData/Roaming/Code/User/mcp.json"),
+    ("win32", "claude-desktop", "AppData/Roaming/Claude/claude_desktop_config.json"),
+    ("darwin", "vscode", "Library/Application Support/Code/User/mcp.json"),
+    ("darwin", "claude-desktop", "Library/Application Support/Claude/claude_desktop_config.json"),
+])
+def test_cross_platform_config_paths_are_isolated(tmp_path, monkeypatch, platform, target, relative):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "do-not-touch"))
+    expected = tmp_path / relative
+    [(actual, _)] = installer.configure(target, Path("/runtime/python"), Path("/runtime"), tmp_path,
+                                       use_environment=False, platform=platform)
+    assert actual == expected and expected.is_file()
+    assert not (tmp_path / "do-not-touch").exists()
+
+
+def test_platform_install_and_python_paths(tmp_path):
+    assert installer.default_install_dir(tmp_path, "win32", {}) == tmp_path / "AppData/Local/phantom-local"
+    assert installer.default_install_dir(tmp_path, "darwin", {}) == tmp_path / "Library/Application Support/phantom-local"
+    assert installer.default_install_dir(tmp_path, "linux", {}) == tmp_path / ".local/share/phantom-local"
+    assert installer.runtime_python(tmp_path, "win32") == tmp_path / ".venv/Scripts/python.exe"
+    assert installer.runtime_python(tmp_path, "darwin") == tmp_path / ".venv/bin/python"
+
+
+def test_spinner_success_and_failure_logs(monkeypatch, capsys):
+    import io
+    import sys
+    import subprocess
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+    terminal = Terminal()
+    monkeypatch.setattr(installer.sys, "stdout", terminal)
+    installer.run([sys.executable, "-c", "import time; print('child-log'); time.sleep(.2)"], label="Downloading")
+    assert "◐" in terminal.getvalue() and "✓ Downloading" in terminal.getvalue()
+    assert "child-log" not in terminal.getvalue()
+    with pytest.raises(subprocess.CalledProcessError):
+        installer.run([sys.executable, "-c", "import sys; print('failure detail'); sys.exit(3)"], label="Failure")
+    assert "failure detail" in capsys.readouterr().err
+
+
+def test_spinner_command_deadline():
+    import sys
+    import subprocess
+    with pytest.raises(subprocess.TimeoutExpired):
+        installer.run([sys.executable, "-c", "import time; time.sleep(10)"], label="Timeout", timeout=.1)
