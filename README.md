@@ -1,6 +1,7 @@
 # PhantomScrape Local
 
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
+[![Cross-platform checks](https://github.com/dangnhatphi001-vibe-AI/PhantomScrape-Local/actions/workflows/tests.yml/badge.svg)](https://github.com/dangnhatphi001-vibe-AI/PhantomScrape-Local/actions/workflows/tests.yml)
 
 Công cụ lấy web thành Markdown cho AI, chạy trên máy của bạn, không cần thuê scraping API.
 
@@ -76,10 +77,10 @@ Codex và ChatGPT desktop trên cùng host dùng chung cấu hình MCP. ChatGPT 
 không tự đọc cấu hình local; lựa chọn 9 chỉ giải thích giới hạn, không giả báo cài thành công.
 Nguồn: [OpenAI MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 
-Có adapter cấu hình cho các client trên. Đã kiểm thử cài trong môi trường cô lập,
-handshake MCP, bảo toàn cấu hình cũ và runtime trên Linux; chưa thử UI của từng app
-hay chạy installer trên macOS/Windows. PowerShell được kiểm tra riêng trên Linux;
-các đường dẫn cấu hình Windows/macOS được kiểm thử bằng fixture.
+Bộ kiểm thử tự động đã qua trên **Linux, Windows và macOS**, gồm trích Markdown,
+Chromium, handshake MCP, ghi cấu hình và bảo toàn dữ liệu cũ. Menu PowerShell
+được kiểm thử trên Windows; lệnh tải PowerShell từ GitHub được thử trên Linux.
+Chưa kiểm thử UI của từng ứng dụng AI; sau khi cài vẫn cần mở lại app / bật MCP.
 
 ## License
 
