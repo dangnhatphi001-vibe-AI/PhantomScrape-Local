@@ -1,13 +1,15 @@
 # PhantomScrape Local
 
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
+
 Công cụ lấy web thành Markdown cho AI, chạy trên máy của bạn, không cần thuê scraping API.
 
 ## Cài bằng một lệnh
 
-Mở terminal trong thư mục dự án, dán:
+Mở terminal Bash ở bất kỳ thư mục nào, dán:
 
 ```bash
-bash install.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/dangnhatphi001-vibe-AI/PhantomScrape-Local/main/install.sh)
 ```
 
 Nhập số chọn nơi cài:
@@ -39,11 +41,12 @@ Trình cài thêm công cụ vào app đã có; không cài thay Codex/Claude/Op
 ## Cài thẳng, không hiện menu
 
 ```bash
-bash install.sh --targets codex,claude,opencode
+bash <(curl -fsSL https://raw.githubusercontent.com/dangnhatphi001-vibe-AI/PhantomScrape-Local/main/install.sh) --targets codex,claude,opencode
 ```
 
-Windows (terminal có Python): `python scripts/install.py`.
-macOS/Linux dùng `bash install.sh`.
+macOS/Linux: lệnh GitHub ở trên tự tải source, không cần clone repo trước.
+Nếu đã tải source: `bash install.sh`.
+Windows (terminal có Python, trong source đã tải): `python scripts/install.py`.
 
 Công cụ được copy vào `~/.local/share/phantom-local` (hoặc theo `XDG_DATA_HOME`),
 độc lập với thư mục source. Cấu hình cũ có bản sao lưu cạnh file trước khi sửa;
@@ -58,6 +61,13 @@ Nguồn: [OpenAI MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 Có adapter cấu hình cho các client trên. Đã kiểm thử cài trong môi trường cô lập,
 handshake MCP, bảo toàn cấu hình cũ và runtime trên Linux; chưa thử UI của từng app
 hay chạy installer trên macOS/Windows.
+
+## License
+
+**PolyForm Noncommercial License 1.0.0** — Copyright 2026 Dang Nhat Phi.
+
+Toàn văn license riêng của dự án nằm trong [LICENSE](LICENSE), gồm Required Notice
+của tác giả. Trình cài cũng giữ một bản LICENSE trong thư mục công cụ đã cài.
 
 Tài liệu kỹ thuật/CLI: [LOCAL-advanced.md](docs/LOCAL-advanced.md).
 README API cũ: [README-legacy.md](docs/README-legacy.md).

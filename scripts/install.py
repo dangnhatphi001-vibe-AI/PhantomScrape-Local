@@ -73,6 +73,8 @@ def setup_runtime(directory: Path, browser: bool) -> Path:
         (directory / "scripts").mkdir(exist_ok=True)
         shutil.copy2(SOURCE / "scripts/run_mcp.py", directory / "scripts/run_mcp.py")
         shutil.copy2(SOURCE / "requirements-local.txt", directory / "requirements-local.txt")
+        if (SOURCE / "LICENSE").is_file():
+            shutil.copy2(SOURCE / "LICENSE", directory / "LICENSE")
     python = runtime_python(directory)
     if not python.is_file():
         print("\n[1/4] Tạo môi trường Python riêng…", flush=True)

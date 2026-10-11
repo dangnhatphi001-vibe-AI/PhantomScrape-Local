@@ -90,3 +90,22 @@ def test_menu_multi_select_and_web_not_claimed_installed(monkeypatch):
     answers = iter(["9", "nonsense", "1,3,4,1"])
     monkeypatch.setattr("builtins.input", lambda _: next(answers))
     assert installer.choose_targets() == ["codex", "claude", "opencode"]
+
+
+def test_runtime_copy_includes_original_license(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    (source / "phantom_local").mkdir(parents=True)
+    (source / "phantom_local/__init__.py").write_text("")
+    (source / "scripts").mkdir()
+    (source / "scripts/run_mcp.py").write_text("# entrypoint\n")
+    (source / "requirements-local.txt").write_text("# fixture\n")
+    notice = b"Required Notice: test author\n\nLicense fixture\n"
+    (source / "LICENSE").write_bytes(notice)
+    destination = tmp_path / "installed"
+    python = installer.runtime_python(destination)
+    python.parent.mkdir(parents=True)
+    python.write_text("# mocked runtime\n")
+    monkeypatch.setattr(installer, "SOURCE", source)
+    monkeypatch.setattr(installer, "run", lambda *args, **kwargs: None)
+    assert installer.setup_runtime(destination, browser=False) == python
+    assert (destination / "LICENSE").read_bytes() == notice
